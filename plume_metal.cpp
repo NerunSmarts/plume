@@ -338,6 +338,14 @@ namespace plume {
                 return MTL::PixelFormatRGBA8Sint;
             case RenderFormat::B8G8R8A8_UNORM:
                 return MTL::PixelFormatBGRA8Unorm;
+            case RenderFormat::ASTC_4x4_UNORM:
+                return MTL::PixelFormatASTC_4x4_LDR;
+            case RenderFormat::ASTC_4x4_UNORM_SRGB:
+                return MTL::PixelFormatASTC_4x4_sRGB;
+            case RenderFormat::ASTC_6x6_UNORM:
+                return MTL::PixelFormatASTC_6x6_LDR;
+            case RenderFormat::ASTC_6x6_UNORM_SRGB:
+                return MTL::PixelFormatASTC_6x6_sRGB;
             case RenderFormat::R16G16_TYPELESS:
                 return MTL::PixelFormatRG16Float;
             case RenderFormat::R16G16_FLOAT:

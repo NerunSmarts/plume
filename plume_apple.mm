@@ -7,10 +7,19 @@
 
 #include "plume_apple.h"
 
-#import <AppKit/AppKit.h>
-#import <Foundation/Foundation.h>
-#import <IOKit/IOKitLib.h>
+#import <TargetConditionals.h>
 
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
+#import <AppKit/AppKit.h>
+#import <IOKit/IOKitLib.h>
+#else
+#import <UIKit/UIKit.h>
+#import <QuartzCore/CAMetalLayer.h>
+#endif
+
+#import <Foundation/Foundation.h>
+
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
 static uint32_t plumeGetEntryProperty(io_registry_entry_t entry, CFStringRef propertyName) {
     uint32_t value = 0;
     CFTypeRef cfProp = IORegistryEntrySearchCFProperty(entry, kIOServicePlane, propertyName, kCFAllocatorDefault, kIORegistryIterateRecursively | kIORegistryIterateParents);
@@ -27,9 +36,37 @@ static uint32_t plumeGetEntryProperty(io_registry_entry_t entry, CFStringRef pro
 
     return value;
 }
+#endif
 
 namespace plume {
+    void* ensureMetalLayerForIOSWindow(void* window) {
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
+        return nullptr;
+#else
+        UIWindow *uiWindow = window != nullptr
+            ? (__bridge UIWindow *)window
+            : [UIApplication sharedApplication].keyWindow;
+        if (uiWindow == nil)
+            return nullptr;
+
+        UIView *contentView = uiWindow.rootViewController.view;
+        if (contentView == nil)
+            contentView = uiWindow;
+
+        for (CALayer *sublayer in contentView.layer.sublayers) {
+            if ([sublayer isKindOfClass:[CAMetalLayer class]])
+                return (__bridge void *)sublayer;
+        }
+
+        CAMetalLayer *metalLayer = [CAMetalLayer layer];
+        metalLayer.frame = contentView.bounds;
+        [contentView.layer addSublayer:metalLayer];
+        return (__bridge void *)metalLayer;
+#endif
+    }
+
     RenderDeviceVendor getRenderDeviceVendor(uint64_t registryID) {
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
         io_service_t entry = IOServiceGetMatchingService(MACH_PORT_NULL, IORegistryEntryIDMatching(registryID));
 
         if (entry) {
@@ -44,8 +81,12 @@ namespace plume {
         }
         
         return RenderDeviceVendor::UNKNOWN;
+        #else
+            return RenderDeviceVendor::UNKNOWN;
+        #endif
     }
 
+        #if TARGET_OS_OSX || TARGET_OS_MACCATALYST
     CGFloat getScaleFactor(NSWindow *nsWindow) {
 #ifdef APPLE_RETINA_ENABLED
         return [nsWindow backingScaleFactor];
@@ -53,6 +94,11 @@ namespace plume {
         return 1.0f;
 #endif
     }
+#else
+    CGFloat getScaleFactor(UIWindow *uiWindow) {
+        return uiWindow.screen.scale;
+    }
+#endif
 
     // MARK: - CocoaWindow
 
@@ -61,6 +107,7 @@ namespace plume {
         cachedAttributes = {0, 0, 0, 0};
 
         if ([NSThread isMainThread]) {
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
             NSWindow *nsWindow = (__bridge NSWindow *)windowHandle;
             NSRect contentFrame = [[nsWindow contentView] frame];
             CGFloat scaleFactor = getScaleFactor(nsWindow);
@@ -74,6 +121,17 @@ namespace plume {
             if (@available(macOS 12.0, *)) {
                 cachedRefreshRate.store((int)[screen maximumFramesPerSecond]);
             }
+#else
+            UIWindow *uiWindow = (__bridge UIWindow *)windowHandle;
+            CGRect frame = uiWindow.bounds;
+            CGFloat scaleFactor = getScaleFactor(uiWindow);
+
+            cachedAttributes.x = (int)round(frame.origin.x);
+            cachedAttributes.y = (int)round(frame.origin.y);
+            cachedAttributes.width = (int)round(frame.size.width * scaleFactor);
+            cachedAttributes.height = (int)round(frame.size.height * scaleFactor);
+            cachedRefreshRate.store((int)uiWindow.screen.maximumFramesPerSecond);
+#endif
         } else {
             updateWindowAttributesInternal(true);
             updateRefreshRateInternal(true);
@@ -84,6 +142,7 @@ namespace plume {
 
     void CocoaWindow::updateWindowAttributesInternal(bool forceSync) {
         auto updateBlock = ^{
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
             NSWindow *nsWindow = (__bridge NSWindow *)windowHandle;
             NSRect contentFrame = [[nsWindow contentView] frame];
             CGFloat scaleFactor = getScaleFactor(nsWindow);
@@ -93,6 +152,17 @@ namespace plume {
             cachedAttributes.y = (int)round(contentFrame.origin.y);
             cachedAttributes.width = (int)round(contentFrame.size.width * scaleFactor);
             cachedAttributes.height = (int)round(contentFrame.size.height * scaleFactor);
+#else
+            UIWindow *uiWindow = (__bridge UIWindow *)windowHandle;
+            CGRect frame = uiWindow.bounds;
+            CGFloat scaleFactor = getScaleFactor(uiWindow);
+
+            std::lock_guard<std::mutex> lock(attributesMutex);
+            cachedAttributes.x = (int)round(frame.origin.x);
+            cachedAttributes.y = (int)round(frame.origin.y);
+            cachedAttributes.width = (int)round(frame.size.width * scaleFactor);
+            cachedAttributes.height = (int)round(frame.size.height * scaleFactor);
+#endif
         };
 
         if (forceSync) {
@@ -104,11 +174,16 @@ namespace plume {
 
     void CocoaWindow::updateRefreshRateInternal(bool forceSync) {
         auto updateBlock = ^{
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
             NSWindow *nsWindow = (__bridge NSWindow *)windowHandle;
             NSScreen *screen = [nsWindow screen];
             if (@available(macOS 12.0, *)) {
                 cachedRefreshRate.store((int)[screen maximumFramesPerSecond]);
             }
+#else
+            UIWindow *uiWindow = (__bridge UIWindow *)windowHandle;
+            cachedRefreshRate.store((int)uiWindow.screen.maximumFramesPerSecond);
+#endif
         };
 
         if (forceSync) {
@@ -120,6 +195,7 @@ namespace plume {
 
     void CocoaWindow::getWindowAttributes(CocoaWindowAttributes* attributes) const {
         if ([NSThread isMainThread]) {
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
             NSWindow *nsWindow = (__bridge NSWindow *)windowHandle;
             NSRect contentFrame = [[nsWindow contentView] frame];
             CGFloat scaleFactor = getScaleFactor(nsWindow);
@@ -133,6 +209,21 @@ namespace plume {
 
                 *attributes = cachedAttributes;
             }
+#else
+            UIWindow *uiWindow = (__bridge UIWindow *)windowHandle;
+            CGRect frame = uiWindow.bounds;
+            CGFloat scaleFactor = getScaleFactor(uiWindow);
+
+            {
+                std::lock_guard<std::mutex> lock(attributesMutex);
+                const_cast<CocoaWindow*>(this)->cachedAttributes.x = (int)round(frame.origin.x);
+                const_cast<CocoaWindow*>(this)->cachedAttributes.y = (int)round(frame.origin.y);
+                const_cast<CocoaWindow*>(this)->cachedAttributes.width = (int)round(frame.size.width * scaleFactor);
+                const_cast<CocoaWindow*>(this)->cachedAttributes.height = (int)round(frame.size.height * scaleFactor);
+
+                *attributes = cachedAttributes;
+            }
+#endif
         } else {
             {
                 std::lock_guard<std::mutex> lock(attributesMutex);
@@ -145,6 +236,7 @@ namespace plume {
 
     int CocoaWindow::getRefreshRate() const {
         if ([NSThread isMainThread]) {
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
             NSWindow *nsWindow = (__bridge NSWindow *)windowHandle;
             NSScreen *screen = [nsWindow screen];
 
@@ -155,6 +247,12 @@ namespace plume {
             }
 
             return cachedRefreshRate.load();
+#else
+            UIWindow *uiWindow = (__bridge UIWindow *)windowHandle;
+            int freshRate = (int)uiWindow.screen.maximumFramesPerSecond;
+            const_cast<CocoaWindow*>(this)->cachedRefreshRate.store(freshRate);
+            return freshRate;
+#endif
         } else {
             int rate = cachedRefreshRate.load();
 
@@ -165,6 +263,7 @@ namespace plume {
     }
 
     void CocoaWindow::toggleFullscreen() {
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
         if ([NSThread isMainThread]) {
             NSWindow *nsWindow = (__bridge NSWindow *)windowHandle;
             [nsWindow toggleFullScreen:NULL];
@@ -174,5 +273,6 @@ namespace plume {
                 [nsWindow toggleFullScreen:NULL];
             });
         }
+#endif
     }
 }

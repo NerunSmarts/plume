@@ -147,6 +147,14 @@ namespace plume {
             return VK_FORMAT_R8G8B8A8_SINT;
         case RenderFormat::B8G8R8A8_UNORM:
             return VK_FORMAT_B8G8R8A8_UNORM;
+        case RenderFormat::ASTC_4x4_UNORM:
+            return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+        case RenderFormat::ASTC_4x4_UNORM_SRGB:
+            return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
+        case RenderFormat::ASTC_6x6_UNORM:
+            return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
+        case RenderFormat::ASTC_6x6_UNORM_SRGB:
+            return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
         case RenderFormat::R16G16_TYPELESS:
             return VK_FORMAT_R16G16_SFLOAT;
         case RenderFormat::R16G16_FLOAT:

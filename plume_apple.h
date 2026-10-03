@@ -13,6 +13,7 @@
 
 namespace plume {
     RenderDeviceVendor getRenderDeviceVendor(uint64_t registryID);
+    void* ensureMetalLayerForIOSWindow(void* window);
 
     struct CocoaWindowAttributes {
         int x, y;

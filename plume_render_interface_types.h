@@ -160,6 +160,10 @@ namespace plume {
         BC7_TYPELESS,
         BC7_UNORM,
         BC7_UNORM_SRGB,
+        ASTC_4x4_UNORM,
+        ASTC_4x4_UNORM_SRGB,
+        ASTC_6x6_UNORM,
+        ASTC_6x6_UNORM_SRGB,
         MAX
     };
 
@@ -590,6 +594,10 @@ namespace plume {
         case RenderFormat::BC6H_SF16:
         case RenderFormat::BC7_UNORM:
         case RenderFormat::BC7_UNORM_SRGB:
+        case RenderFormat::ASTC_4x4_UNORM:
+        case RenderFormat::ASTC_4x4_UNORM_SRGB:
+        case RenderFormat::ASTC_6x6_UNORM:
+        case RenderFormat::ASTC_6x6_UNORM_SRGB:
             return 16;
         default:
             assert(false && "Unknown format.");
@@ -674,7 +682,12 @@ namespace plume {
         case RenderFormat::BC7_TYPELESS:
         case RenderFormat::BC7_UNORM:
         case RenderFormat::BC7_UNORM_SRGB:
+        case RenderFormat::ASTC_4x4_UNORM:
+        case RenderFormat::ASTC_4x4_UNORM_SRGB:
             return 4;
+        case RenderFormat::ASTC_6x6_UNORM:
+        case RenderFormat::ASTC_6x6_UNORM_SRGB:
+            return 6;
         default:
             assert(false && "Unknown format.");
             return 1;
